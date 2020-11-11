@@ -6,7 +6,7 @@ pygame.init()
 pygame.mixer.init()
 
 SCREEN_WIDTH = 580 
-SCREEN_HEIGHT = 600
+SCREEN_HEIGHT = 640
 FPS = 60
 
 screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
@@ -81,10 +81,13 @@ class Laser():
         self.y -= self.VEL
 
     def collision(self, obj): 
-        pass
+        if collision(self, obj): 
+            return True
+
+        return False 
 
 class Ship():
-    VEL = 6
+    VEL = 8
     COOLDOWN = 15
 
     def __init__(self, x, y): 
@@ -108,7 +111,7 @@ class Ship():
         if self.cooldown_counter >= self.COOLDOWN:
             self.cooldown_counter = 0
 
-    def move_lasers(self): 
+    def move_lasers(self, obj, objs, temp): 
         self.cooldown()
         for laser in self.lasers[:]: 
             laser.move()
@@ -133,9 +136,6 @@ class Player(Ship):
         self.img = RED_SHIP
         self.mask = pygame.mask.from_surface(self.img)
 
-        self.width = self.get_width
-        self.height = self.get_height
-
         self.laser_img = RED_LASER
 
 class Enenmy(Ship):
@@ -145,18 +145,18 @@ class Enenmy(Ship):
 
 class Meteor(): 
     SIZE_MAP = {
-        "large": random.choice((METEOR_BROWN_LARGE1, METEOR_BROWN_LARGE2)),
+        "large1": METEOR_BROWN_LARGE1,
+        "large2": METEOR_BROWN_LARGE2,
         "med": METEOR_BROWM_MED,
         "small": METEOR_BROWM_SMALL
     }
 
-    VEL_X = random.randrange(-5, 5)
-    VEL_Y = random.randrange(5, 10)
+    VEL_X = random.randrange(-4, 4)
+    VEL_Y = random.randrange(3, 10)
 
     def __init__(self, size):
         self.img = self.SIZE_MAP[size]
-        self.mask = pygame.mask.from_surface(self.img)
-        self.rect = self.img.get_rect()
+        self.mask = pygame.mask.from_surface(self.img) 
 
         self.x = random.randrange(SCREEN_WIDTH - self.img.get_width())
         self.y = random.randrange(-240, -100)
@@ -167,16 +167,23 @@ class Meteor():
     def move(self): 
         self.x += self.VEL_X
         self.y += self.VEL_Y
-        if self.y > SCREEN_HEIGHT or self.x <= 0 - self.img.get_width() or self.x >= SCREEN_WIDTH: 
-            self.img = self.SIZE_MAP[random.choice(["large", "med", "small"])]
-            self.x = random.randrange(SCREEN_WIDTH - self.img.get_width())
-            self.y = random.randrange(-240, -100)
-            self.VEL_X = random.randrange(-5, 5)
-            self.VEL_Y = random.randrange(5, 10)
 
-def collision(sprite1, sprite2): 
-    pass
+    def create_new(self): 
+        self.x = random.randrange(SCREEN_WIDTH - self.img.get_width())
+        self.y = random.randrange(-240, -100)
+        self.VEL_X = random.randrange(-5, 5)
+        self.VEL_Y = random.randrange(5, 10)
+
+def collision(obj1, obj2): 
+    offset_x = round(obj2.x - obj1.x)
+    offset_y = round(obj2.y - obj1.y)
+
+    collide_mask = obj1.mask.overlap(obj2.mask, (offset_x, offset_y))
+
+    if collide_mask:
+        return True
     
+    return False
 
 def blit_rotate_center(img, position, angle): 
     pass
@@ -191,17 +198,19 @@ def main(screen):
     run = True
     game = True 
     lost = False
-    wave_lenght = 7
+
+    wave_lenght = 8
+
+    meteors = []
 
     player = Player(SCREEN_WIDTH / 2 - 50, SCREEN_HEIGHT - 80)
-    meteors = []
 
     def redraw_game_window(screen): 
         screen.blit(BG_IMG, (0, 0)) 
 
         player.draw(screen)
         for meteor in meteors:
-            meteor.draw(screen)
+            meteor.draw(screen) 
         pygame.display.update()
 
     while run: 
@@ -225,13 +234,36 @@ def main(screen):
             temp = []
             if len(meteors) == 0:
                 for i in range(wave_lenght):
-                    meteor = Meteor(random.choice(["large", "med", "small"]))
+                    meteor = Meteor(random.choice(["large1", "large2", "med", "small"]))
                     meteors.append(meteor)
             
-            for meteor in meteors: 
+            for laser in player.lasers[:]: 
+                for meteor in  meteors[:]: 
+                    if laser.collision(meteor): 
+                        meteors.remove(meteor)
+                        temp.append(meteor)
+                        if laser in player.lasers: 
+                            player.lasers.remove(laser)
+
+            for meteor in meteors[:]: 
                 meteor.move()
-            
-            player.move_lasers()        
+                if meteor.y > SCREEN_HEIGHT or meteor.x <= (0 - meteor.img.get_width()) or meteor.x >= SCREEN_WIDTH: 
+                    meteors.remove(meteor)
+                    temp.append(meteor)
+
+                if collision(meteor, player): 
+                    meteors.remove(meteor)
+                    temp.append(meteor)
+
+            if len(meteors) < wave_lenght:
+                for i in range(len(temp)):
+                    meteor = Meteor(random.choice(["large1", "large2", "med", "small"]))
+                    meteor.create_new()
+                    meteors.append(meteor)
+                    lost = True
+                    print(meteor.VEL_X, meteor.VEL_Y)
+
+            player.move_lasers(meteor, meteors, temp)        
 
         redraw_game_window(screen)
 
