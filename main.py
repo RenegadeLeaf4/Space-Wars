@@ -12,8 +12,9 @@ FPS = 60
 screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
 pygame.display.set_caption("Space-Wars")
 
-main_font = pygame.font.Font(os.path.join("assets", "kenvector_future_thin.ttf"), 30)
-main_font_smaller = pygame.font.Font(os.path.join("assets", "kenvector_future_thin.ttf"), 20)
+MAIN_FONT = pygame.font.Font(os.path.join("assets", "kenvector_future_thin.ttf"), 30)
+MAIN_FONT_BIGGER = pygame.font.Font(os.path.join("assets", "kenvector_future_thin.ttf"), 50)
+MAIN_FONT_SMALLER = pygame.font.Font(os.path.join("assets", "kenvector_future_thin.ttf"), 20)
 
 # Background
 BG_IMG = pygame.transform.scale(pygame.image.load(os.path.join("assets", "bg.png")), (SCREEN_WIDTH, SCREEN_HEIGHT)).convert_alpha()
@@ -60,9 +61,12 @@ LIVE_BLUE = pygame.image.load(os.path.join("assets/ui", "lifeBlue.png")).convert
 # Sound
 EXPLOSION_SND = pygame.mixer.Sound(os.path.join("assets/sound" , "sfx_explosion.ogg"))
 LASER_SND = pygame.mixer.Sound(os.path.join("assets/sound", "sfx_laser.ogg"))
+POWERUP_SND = pygame.mixer.Sound(os.path.join("assets/sound", "sfx_powerup.ogg"))
 LOSE_SND = pygame.mixer.Sound(os.path.join("assets/sound" , "sfx_lose.ogg"))
-SHIELD_SND = pygame.mixer.Sound(os.path.join("assets/sound" , "sfx_shieldUp.ogg"))
 ZAP_SND = pygame.mixer.Sound(os.path.join("assets/sound", "sfx_zap.ogg"))
+GAME_MUSIC = pygame.mixer.music.load(os.path.join("assets/sound", "game_music.mp3"))
+
+pygame.mixer.music.set_volume(0.4)
 
 WHITE = (255, 255, 255)
 BLACK = (0, 0, 0)
@@ -128,6 +132,7 @@ class Ship():
 
     def shoot(self):
         if self.cooldown_counter == 0:
+            LASER_SND.play()
             laser = Laser(self.x + self.img.get_width() / 2 - self.laser_img.get_width() + 4, self.y - self.laser_img.get_height(), self.laser_img)
             self.lasers.append(laser)
             self.cooldown_counter += 1
@@ -280,16 +285,57 @@ def blit_rotate_center(img, position, angle):
     screen.blit(rot_image, rot_rect.topleft)
 
 def menu_screen(screen): 
-    pass
+    menu_text = MAIN_FONT.render("Press mouse to start", 1, WHITE)
+    menu_text_rect = menu_text.get_rect(center = (SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 - menu_text.get_height() / 2))
+
+    screen.blit(BG_IMG, (0, 0))
+    screen.blit(menu_text, menu_text_rect)
+    
+    pygame.display.flip()
+    pygame.mixer.music.play(loops=-1)
+    run = True 
+    while run: 
+        clock.tick(FPS)
+        for event in pygame.event.get(): 
+            if event.type == pygame.QUIT: 
+                pygame.quit()
+                quit()
+                break
+
+            if event.type == pygame.MOUSEBUTTONDOWN: 
+                main(screen)
+                run = False
 
 def game_over_screen(screen): 
-    pass
+    go_text = MAIN_FONT_BIGGER.render("You lost!", 1, WHITE)
+    go_text_rect = go_text.get_rect(center = (SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 - go_text.get_height() / 2))
+
+    restart_text = MAIN_FONT.render("Press mouse to restart", 1, WHITE)
+    restart_text_rect = restart_text.get_rect(center = (SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 + 100))
+
+    screen.blit(BG_IMG, (0, 0))
+    screen.blit(go_text, go_text_rect)
+    screen.blit(restart_text, restart_text_rect)
+    
+    pygame.display.flip()
+    run = True 
+    while run: 
+        clock.tick(FPS)
+        for event in pygame.event.get(): 
+            if event.type == pygame.QUIT: 
+                pygame.quit()
+                quit()
+                break
+
+            if event.type == pygame.MOUSEBUTTONDOWN: 
+                main(screen)
+                run = False
+
 
 def main(screen): 
     run = True
     game = True 
-    lost = False
-    death = False
+
     score = 0
 
     wave_lenght = 8
@@ -307,11 +353,11 @@ def main(screen):
         
         player.draw(screen)
 
-        score_text = main_font.render(str(score), 1, WHITE)
+        score_text = MAIN_FONT.render(str(score), 1, WHITE)
         score_text_rect = score_text.get_rect(center = (SCREEN_WIDTH / 2, 50))
         screen.blit(score_text, score_text_rect)
 
-        death_text = main_font_smaller.render("Press arrow key up to get back to the position", 1, WHITE)
+        death_text = MAIN_FONT_SMALLER.render("Press arrow key up to get back to the position", 1, WHITE)
         death_text_rect = death_text.get_rect(center = (SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2))
         if player.y > SCREEN_HEIGHT - 80: 
             screen.blit(death_text, death_text_rect)
@@ -331,7 +377,7 @@ def main(screen):
         clock.tick(FPS)
         for event in pygame.event.get(): 
             if event.type == pygame.QUIT:
-                run = False 
+                quit()
             if event.type == pygame.K_UP: 
                 if event.type == pygame.K_SPACE: 
                     game = True
@@ -356,6 +402,7 @@ def main(screen):
             for laser in player.lasers[:]: 
                 for meteor in  meteors[:]: 
                     if laser.collision(meteor): 
+                        EXPLOSION_SND.play()
                         meteor_explosion = Explosion(meteor.x + meteor.img.get_width() / 2, meteor.y - meteor.img.get_height() / 2, REGULAR_EXPLOSIONS)
                         explosions.append(meteor_explosion)
                         for meteor_explosion in explosions:
@@ -381,7 +428,9 @@ def main(screen):
                     temp.append(meteor)
 
                 if collision(meteor, player) and player.y == SCREEN_HEIGHT - 80: 
-                    meteors.remove(meteor)
+                    EXPLOSION_SND.play()
+                    if meteor in meteors: 
+                        meteors.remove(meteor)
                     temp.append(meteor)
                     player_explosion = Explosion(meteor.x + meteor.img.get_width() / 2, meteor.y - meteor.img.get_height() / 2, REGULAR_EXPLOSIONS)
                     if player.health > 12: 
@@ -398,6 +447,7 @@ def main(screen):
                         player.health -= 12
 
                     if player.health <= 0: 
+                        LOSE_SND.play()
                         death_explosion = Explosion(player.x + player.img.get_width() / 2, player.y - player.img.get_height() / 2, SONIC_EXPLOSIONS)
                         explosions.append(death_explosion)
                         for death_explosion in explosions: 
@@ -409,7 +459,7 @@ def main(screen):
                         if player.lives >= 1: 
                             player.health = 100
                         elif player.lives <= 0: 
-                            lost = True 
+                            LOSE_SND.play()
                             run =  False 
 
             if len(meteors) < wave_lenght:
@@ -424,4 +474,4 @@ def main(screen):
 
     game_over_screen(screen)
 
-main(screen)  
+menu_screen(screen) 
